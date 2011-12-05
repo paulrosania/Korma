@@ -268,12 +268,16 @@
                (map-val v))
     :else (table-str v)))
 
-(defn join-clause [join-type table pk fk]
+(defn on-clause [clause]
+  (if (string? clause)
+    clause
+    (map-val clause)))
+
+(defn join-clause [join-type table clause]
   (let [join-type (string/upper-case (name join-type))
         table (from-table table)
-        join (str " " join-type " JOIN " table " ON ")
-        on-clause (str (field-str pk) " = " (field-str fk))]
-    (str join on-clause)))
+        join (str " " join-type " JOIN " table " ON ")]
+    (str join (on-clause clause))))
 
 (defn insert-values-clause [ks vs]
   (for [v vs]
@@ -323,8 +327,8 @@
     (update-in query [:sql-str] str neue-sql))))
 
 (defn sql-joins [query]
-  (let [clauses (for [[type table pk fk] (:joins query)]
-                  (join-clause type table pk fk))
+  (let [clauses (for [[type table keys] (:joins query)]
+                  (join-clause type table keys))
         clauses-str (string/join "" clauses)]
     (update-in query [:sql-str] str clauses-str)))
 

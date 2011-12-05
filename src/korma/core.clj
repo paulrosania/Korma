@@ -188,20 +188,39 @@
                                       [values]
                                       values)))
 
-(defn join 
-  "Add a join clause to a select query, specifying the table name to join and the two fields
-  to predicate the join on.
-  
-  (join query addresses)
-  (join query addresses :addres.users_id :users.id)
-  (join query :right addresses :address.users_id :users.id)"
+(defn join*
+  "Add a join clause to a select query, specifying the table name to join and a string
+  or map of keys and values to join on."
   ([query ent]
-   (let [{:keys [pk fk]} (get-rel (:ent query) ent)]
-     (join query ent pk fk)))
-  ([query table field1 field2]
-   (join query :left table field1 field2))
-  ([query type table field1 field2]
-   (update-in query [:joins] conj [type table field1 field2])))
+     (let [{:keys [pk fk]} (get-rel (:ent query) ent)]
+       (join* query ent (str pk " = " fk))))
+  ([query table clause]
+     (join* query :left table clause))
+  ([query type table clause]
+     (update-in query [:joins] conj [type table clause])))
+
+(defmacro join
+  "Add a join clause to a select query, specifying the table name to join and a string,
+  map of keys, or Clojure predicate to join on.
+  e.g. (where query (or (= :hits 1) (> :hits 5)))  
+
+  Available predicates: and, or, =, not=, <, >, <=, >=, in, like, not
+
+  (join query addresses)
+  (join query addresses (= :address.users_id :users.id))
+  (join query :right addresses (= :address.users_id :users.id))"
+  ([query table]
+     `(join* ~query ~table))
+  ([query table form]
+     `(join ~query :left ~table ~form))
+  ([query type table form]
+     `(let [q# ~query]
+        (join* q#
+               ~type
+               ~table
+               (isql/pred-map
+                (bind-query q#
+                            ~(isql/parse-where `~form)))))))
 
 (defn post-query
   "Add a function representing a query that should be executed for each result in a select.
@@ -528,7 +547,7 @@
   (let [table (if (:alias rel)
                 [(:table ent) (:alias ent)]
                 (:table ent))
-        query (join query table (:pk rel) (:fk rel))]
+        query (join* query table (str (:pk rel) " = " (:fk rel)))]
     (sub-query query ent func)))
 
 (defn with* [query sub-ent func]
